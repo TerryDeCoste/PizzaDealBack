@@ -4,18 +4,28 @@
   "description": "Backend for Pizza Deal",
   "main": "app.js",
   "dependencies": {
+    "axios": "^0.19.2",
     "body-parser": "^1.19.0",
     "csurf": "^1.11.0",
+    "csv": "^5.3.2",
+    "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "https": "^1.0.0",
-    "jsonwebtoken": "^8.5.1"
+    "jsonwebtoken": "^8.5.1",
+    "nock": "^13.0.2",
+    "pg": "^8.3.0"
   },
   "devDependencies": {
-    "nodemon": "^2.0.4"
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.7.0",
+    "jest": "^26.0.1",
+    "nodemon": "^2.0.4",
+    "superagent": "^5.2.2",
+    "supertest": "^4.0.2"
   },
   "scripts": {
-    "start": "nodemon app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "nodemon server.js",
+    "test": "nodemon --ext js --watch ./ --exec jest --delay 1"
   },
   "repository": {
     "type": "git",
