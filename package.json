@@ -24,7 +24,7 @@
     "supertest": "^4.0.2"
   },
   "scripts": {
-    "start": "nodemon server.js",
+    "start": "node server.js",
     "test": "nodemon --ext js --watch ./ --exec jest --delay 1"
   },
   "repository": {
