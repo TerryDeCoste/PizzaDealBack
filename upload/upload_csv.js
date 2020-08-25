@@ -152,7 +152,7 @@ try {
     const sizesToAdd = [];
     toFind.sizes.forEach(size => {
         let sizeExist = false;
-        let sizeItemId = Number(items.find(item => item.name === size.itemName).id || 0);
+        let sizeItemId = items.find(item => item.name === size.itemName) ? Number(items.find(item => item.name === size.itemName).id || -1) : -1;
         sizes.forEach(foundSize => {
             if (foundSize.name === size.sizeName
                 && Number(foundSize.item_id) === sizeItemId){
@@ -329,7 +329,121 @@ try {
     console.log("Process ERROR", error);
 }}
 
-//WORKING HERE - TO ADD: chains and stores
+const procssChains = async (chainCsv) => {
+try {
+    //Loop through data and make list of things to look for
+    const toFind = {
+        chains: [],
+    }
+
+    chainCsv.forEach(chain => {
+        if (chain.name && !toFind.chains.includes(chain.name)){
+            toFind.chains.push(chain.name);
+        }
+    })
+    
+    //Get current data: 
+    const chains = toFind.chains.length > 0 
+        ? await (await db.query(" SELECT name, id FROM chains " + 
+            " WHERE name IN ( '" + 
+            toFind.chains.map(chain => (chain.replace("'", "''"))).join("', '")
+             + "' ) ", [])).rows : null;
+    const chainList = chains ? chains.map(chain => chain.name) : [];
+
+    const maxChainID = await (await db.query(" SELECT MAX(id) AS maxid FROM chains ", [])).rows;
+    let currentChainID = maxChainID[0]['maxid'] || 0;
+    
+    //insert missing chains
+    for (let i = 0; i < chainCsv.length; i++){
+        const chain = chainCsv[i];
+        if (!chainList.includes(chain.name)){
+            currentChainID++;
+            
+            const insertQuery = " INSERT INTO chains (id, name, logo, website) " + 
+            " VALUES (" + currentChainID + "," + 
+            " '" + chain.name + "'," + 
+            " '" + chain.logo + "'," + 
+            " '" + chain.website + "') ";
+
+            try {
+                await db.query(insertQuery, []);
+            } catch (error) {
+                console.log('insert error', error);
+            }
+        }
+    }
+} catch (error){
+    console.log("Chains ERROR", error);
+}}
+
+const processStores = async (storeCsv) => {
+try {
+    //Loop through data and make list of things to look for
+    const toFind = {
+        chains: [],
+        stores: [],
+    }
+
+    storeCsv.forEach(store => {
+        if (store.chain_name && !toFind.chains.includes(store.chain_name)){
+            toFind.chains.push(store.chain_name);
+        }
+    })
+    
+    //Get current data: 
+    const chains = toFind.chains.length > 0 
+        ? await (await db.query(" SELECT name, id FROM chains " + 
+            " WHERE name IN ( '" + 
+            toFind.chains.map(chain => (chain.replace("'", "''"))).join("', '")
+                + "' ) ", [])).rows : null;
+    const stores = toFind.stores.length > 0 
+        ? await (await db.query(" SELECT name, id FROM stores " + 
+            " WHERE name IN ( '" + 
+            toFind.stores.map(store => (store.replace("'", "''"))).join("', '")
+            + "' ) ", [])).rows : null;
+    const chainList = chains ? chains.map(chain => chain.name) : [];
+    const storeList = stores ? stores.map(store => store.name) : [];
+
+    //if missing chains, throw error
+    if (toFind.chains.length > chainList.length){
+        throw new Error("Missing chains");
+    }
+
+    //get max storeID
+    const maxStoreID = await (await db.query(" SELECT MAX(id) AS maxid FROM stores ", [])).rows;
+    let currentStoreID = maxStoreID[0]['maxid'] || 0;
+
+    //insert missing stores
+    for (let i = 0; i < storeCsv.length; i++) {
+        const store = storeCsv[i];
+        if (!storeList.includes(store.name)){
+            //get chain id
+            let chainId = 0;
+            chains.forEach(chain => {
+                if (chain.name == store.chain_name){
+                    chainId = chain.id;
+                }
+            });
+
+            currentStoreID++;
+
+            const insertQuery = " INSERT INTO stores " + 
+            "(id, name, chain_id, address, lat, lon, phone, delivery) " + 
+            "VALUES (" + currentStoreID + "," + 
+            " '" + store.name + "'," + 
+            " " + chainId + "," + 
+            " '" + store.address + "'," + 
+            " " + store.lat + "," + 
+            " " + store.lon + "," + 
+            " " + store.phone + "," + 
+            " " + store.delivery + " ) ";
+
+            await db.query(insertQuery, []);
+        }
+    }
+} catch (error){
+    console.log("Stores ERROR", error);
+}}
 
 
 //load csv file
@@ -340,6 +454,10 @@ fs.readFile(fileName, 'utf8', (err, data) => {
         
         if (fileType == "deals"){
             await processDeals(output);
+        } else if (fileType == "chains"){
+            await procssChains(output);
+        } else if (fileType == "stores"){
+            await processStores(output);
         } else {
             throw new Error("FILETYPE not found");
         }

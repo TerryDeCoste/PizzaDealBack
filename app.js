@@ -7,6 +7,8 @@ require('dotenv').config({path: __dirname + '/process.env'}) //load process.env 
 // Create and configure app
 const app = express();
 
+app.use(express.static(path.join(__dirname, './front_build/')));
+
 app.use(bodyParser.json());
 
 app.use((req, res, next) => {
@@ -28,10 +30,11 @@ app.post("/location", require("./routes/location.js"));
 app.post("/itemoptions", require("./routes/itemoptions.js"));
 
 app.use("/", (req, res, next) => {
-    return res.status(404).json({
-        error: true,
-        message: 'Invalid path',
-    });
+    res.sendFile(path.join(__dirname, './front_build/index.html'));
+    // return res.status(404).json({
+    //     error: true,
+    //     message: 'Invalid path',
+    // });
 })
 
 module.exports = app; //for testing

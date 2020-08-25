@@ -4,9 +4,10 @@ const app = require("../app");
 const db = require("../sql/database");
 
 describe("Test the root path", () => {
-  test("It should respond 404 to the GET method", async () => {
+  test("It should respond with the home page to the GET method", async () => {
     const response = await request(app).get("/");
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
+    expect(response.text.includes('Find My Pizza Deal')).toBe(true);
   });
 });
 
