@@ -1,7 +1,8 @@
-//Node utility to upload Deals from a csv file
+//Node utility to upload Deals from a csv file to the db
 const fs = require('fs');
 const parse = require('csv-parse');
 const db = require('../sql/database');
+const updateCalc = require('./update_calc');
 
 // Make sure we got a filename on the command line.
 if (process.argv.length < 4) {
@@ -132,7 +133,7 @@ try {
         
         itemsToAdd.forEach(async (item) => {
             itemID++;
-            await db.query(" INSERT INTO items (id, name) VALUES ($1, $2) ", [itemID, item]);
+            await db.query(" INSERT INTO items (id, name) VALUES ($1, $2) ", [itemID, item.replace("'", "''")]);
         })
     }
     
@@ -172,7 +173,7 @@ try {
         
         sizesToAdd.forEach(async (size) => {
             sizeID++;
-            await db.query(" INSERT INTO sizes (id, name, item_id) VALUES ($1, $2, $3) ", [sizeID, size.name, size.item_id]);
+            await db.query(" INSERT INTO sizes (id, name, item_id) VALUES ($1, $2, $3) ", [sizeID, size.name.replace("'", "''"), size.item_id]);
         })
     }
     
@@ -213,7 +214,7 @@ try {
         
         optionsToAdd.forEach(async (option) => {
             optionID++;
-            await db.query(" INSERT INTO options (id, name, item_id) VALUES ($1, $2, $3) ", [optionID, option.name, option.item_id]);
+            await db.query(" INSERT INTO options (id, name, item_id) VALUES ($1, $2, $3) ", [optionID, option.name.replace("'", "''"), option.item_id]);
         })
     }
     
@@ -361,9 +362,9 @@ try {
             
             const insertQuery = " INSERT INTO chains (id, name, logo, website) " + 
             " VALUES (" + currentChainID + "," + 
-            " '" + chain.name + "'," + 
-            " '" + chain.logo + "'," + 
-            " '" + chain.website + "') ";
+            " '" + chain.name.replace("'", "''") + "'," + 
+            " '" + chain.logo.replace("'", "''") + "'," + 
+            " '" + chain.website.replace("'", "''") + "') ";
 
             try {
                 await db.query(insertQuery, []);
@@ -430,9 +431,9 @@ try {
             const insertQuery = " INSERT INTO stores " + 
             "(id, name, chain_id, address, lat, lon, phone, delivery) " + 
             "VALUES (" + currentStoreID + "," + 
-            " '" + store.name + "'," + 
+            " '" + store.name.replace("'", "''") + "'," + 
             " " + chainId + "," + 
-            " '" + store.address + "'," + 
+            " '" + store.address.replace("'", "''") + "'," + 
             " " + store.lat + "," + 
             " " + store.lon + "," + 
             " " + store.phone + "," + 
@@ -454,6 +455,7 @@ fs.readFile(fileName, 'utf8', (err, data) => {
         
         if (fileType == "deals"){
             await processDeals(output);
+            await updateCalc();
         } else if (fileType == "chains"){
             await procssChains(output);
         } else if (fileType == "stores"){

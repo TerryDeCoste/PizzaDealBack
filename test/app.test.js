@@ -67,6 +67,66 @@ describe("Path: /search", () => {
   });
 });
 
+describe("Path: /searchbychain", () => {
+  test("It should respond to a POST request", async () => {
+    const response = await request(app).post("/searchbychain");
+    expect(response.statusCode).toBe(200);
+  });
+  test("It should have proper headers", async () => {
+    const response = await request(app).post("/searchbychain");
+    const firstChain = JSON.parse(response.text)[0];
+    expect(firstChain.name).not.toBeFalsy();
+    expect(firstChain.distance).not.toBeFalsy();
+    expect(firstChain.store.logo).not.toBeFalsy();
+    expect(firstChain.store.website).not.toBeFalsy();
+    expect(firstChain.deals[0].dealname).not.toBeFalsy();
+    expect(firstChain.deals[0].price).not.toBeFalsy();
+    expect(firstChain.deals[0].value).not.toBeFalsy();
+    expect(firstChain.deals[0].items).not.toBeFalsy();
+  });
+  test("It should search by price", async () => {
+    const response = await request(app).post("/searchbychain").send({priceLimit: '10.0'});
+    const allChains = JSON.parse(response.text);
+    expect(allChains.length).toBeGreaterThan(0);
+    allChains.forEach(chain => {
+      chain.deals.forEach(deal => {
+        expect(deal.price).toBeLessThanOrEqual(10.0);
+      });
+    });
+  });
+  test("It should search by item", async () => {
+    const itemToFind = {
+      calcID: 1,
+      id: 1,
+      name: 'Pizza',
+      size: 'X-Large',
+      sizeId: 1,
+      options: 'topping',
+      count: 2,
+      optionCount: 3,
+    }
+    const response = await request(app).post("/searchbychain").send({items: [itemToFind]});
+
+    const allChains = JSON.parse(response.text);
+    expect(allChains.length).toBeGreaterThan(0);
+    allChains.forEach(chain => {
+      chain.deals.forEach(deal => {
+        let itemInDeal = false;
+        deal.itemObjs.forEach(dealItem => {
+          if (Number(dealItem.item.id) === Number(itemToFind.id)
+            && Number(dealItem.size.id) === Number(itemToFind.sizeId)
+            && dealItem.option.name === itemToFind.options
+            && Number(dealItem.optionCount) >= Number(itemToFind.optionCount)
+            && Number(dealItem.itemCount) * Number(deal.count) >= Number(itemToFind.count)){
+              itemInDeal = true;
+            }
+        });
+        expect(itemInDeal).toBe(true);
+      });
+    });
+  });
+});
+
 describe("Path: /location", () => {
   test("It should respond to a text POST request with proper headers", async () => {
     const mockResponse = { results: [

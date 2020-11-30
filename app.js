@@ -2,7 +2,6 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
 require('dotenv').config({path: __dirname + '/process.env'}) //load process.env variables
-//const multer = require('multer'); //no installed, not sure if needed
 
 // Create and configure app
 const app = express();
@@ -22,19 +21,20 @@ app.use((req, res, next) => {
 });
 
 // Routes
-// const thisroute = require("./folder/file.js")
 app.post("/providers", require("./routes/providers.js"));
 app.post("/topdeals", require("./routes/topdeals.js"));
 app.post("/search", require("./routes/search.js"));
 app.post("/location", require("./routes/location.js"));
 app.post("/itemoptions", require("./routes/itemoptions.js"));
+app.post("/searchbychain", require("./routes/search_by_chain.js"));
+
+app.get("/", (req, res, next) => {
+  res.sendFile(path.join(__dirname, './front_build/index.html'));
+});
 
 app.use("/", (req, res, next) => {
-    res.sendFile(path.join(__dirname, './front_build/index.html'));
-    // return res.status(404).json({
-    //     error: true,
-    //     message: 'Invalid path',
-    // });
-})
+    res.status(301).redirect("/");
+    // no 404 page, just routes to the index page.
+});
 
 module.exports = app; //for testing

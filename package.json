@@ -24,6 +24,8 @@
     "supertest": "^4.0.2"
   },
   "scripts": {
+    "devstart": "nodemon server.js",
+    "single_test": "jest",
     "start": "node server.js",
     "test": "nodemon --ext js --watch ./ --exec jest --delay 1"
   },
