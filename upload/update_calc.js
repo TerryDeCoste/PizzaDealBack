@@ -82,12 +82,14 @@ module.exports = async () => {
     
     // update the deals value in the db
     dealValues.forEach(async deal => {
-        console.log('updating deal ' + deal.id + ' with value ' + deal.value);
-        const updateQuery = ' UPDATE deals SET value = ' + deal.value + ' WHERE id = ' + deal.id + '; SELECT value FROM deals WHERE id = ' + deal.id;
-        const updateDeals = await(await db.query(updateQuery, [])).rows;
+        const updateQuery = ' UPDATE deals SET value = ' + deal.value + ' WHERE id = ' + deal.id;
+        console.log(updateQuery);
+        await(await db.query(updateQuery, []));
     });
-    console.log("Update Exit - DB CLose");
-    db.close();
+    console.log('Deal Value Update complete: ' + dealValues.length + ' values updated');
+
+    //console.log("Update Exit - DB CLose");
+    //db.close();
 
     return 'Database Calculations updated successfully.';
 }

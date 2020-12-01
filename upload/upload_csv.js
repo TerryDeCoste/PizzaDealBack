@@ -14,318 +14,165 @@ const fileType = process.argv[3];
 
 const processDeals = async (dealCsv) => {
 try {
-    //Loop through data and make list of things to look for
-    const toFind = {
-        chains: [],
-        stores: [],
-        items: [],
-        sizes: [],
-        sizeStrings: [],
-        options: [],
-        optionStrings: [],
-    }
-
-    dealCsv.forEach(deal => {
-        if (deal.chain_name && !toFind.chains.includes(deal.chain_name)){
-            toFind.chains.push(deal.chain_name);
-        }
-        if (deal.store_name &&!toFind.stores.includes(deal.store_name)){
-            toFind.stores.push(deal.store_name);
-        }
-        //parse items
-        const itemNames = deal.items.split('|');
-        for (let i = 0; i < itemNames.length; i++){
-            //add item names
-            if (itemNames[i] && !toFind.items.includes(itemNames[i])){
-                toFind.items.push(itemNames[i]);
-            }
-            
-            //add size
-            const sizeString = deal.sizes.split('|')[i] ? deal.sizes.split('|')[i] : null;
-            if (sizeString &&!toFind.sizeStrings.includes(sizeString)){
-                toFind.sizeStrings.push(sizeString);
-            }
-            const size = {
-                itemName: itemNames[i],
-                sizeName: sizeString,
-            }
-            let sizeExist = false;
-            toFind.sizes.forEach(existSize => {
-                if (existSize.itemName === size.itemName
-                    && existSize.sizeName === size.sizeName){
-                    sizeExist = true;
-                }
-            })
-            if (!sizeExist && size.sizeName){
-                toFind.sizes.push(size);
-            }
-            
-            //add options
-            const optionString = deal.options.split('|')[i] ? deal.options.split('|')[i] : null;
-            if (optionString &&!toFind.optionStrings.includes(optionString)){
-                toFind.optionStrings.push(optionString);
-            }
-            const option = {
-                itemName: itemNames[i],
-                optionName: optionString,
-            }
-            let optionExist = false;
-            toFind.options.forEach(existOption => {
-                if (existOption.itemName === option.itemName
-                    && existOption.optionName === option.optionName){
-                        optionExist = true;
-                }
-            })
-            if (!optionExist && option.optionName){
-                toFind.options.push(option);
-            }
-        }
-    })
-    
-    //Get current data: 
-    const chains = toFind.chains.length > 0 
-        ? await (await db.query(" SELECT name, id FROM chains " + 
-            " WHERE name IN ( '" + 
-            toFind.chains.map(chain => (chain.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows : null;
-    const stores = toFind.stores.length > 0 
-        ? await (await db.query(" SELECT name, id FROM stores " + 
-            " WHERE name IN ( '" + 
-            toFind.stores.map(store => (store.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows : null;
-    
-    // if chains or stores are missing, throw error
-    toFind.chains.forEach(chain => {
-        let exist = false;
-        chains.forEach(foundChain => {
-            if (chain === foundChain.name){
-                exist = true;
-            }
-        });
-        if (!exist){
-            throw new Error("Missing Chain: " + chain);
-        }
-    })
-    toFind.stores.forEach(store => {
-        let exist = false;
-        stores.forEach(foundStore => {
-            if (store === foundStore.name){
-                exist = true;
-            }
-        });
-        if (!exist){
-            throw new Error("Missing Store: " + store);
-        }
-    })
-
-    // find Item IDs, add if missing
-    let items = toFind.items.length > 0 
-        ? await (await db.query(" SELECT name, id FROM items " + 
-            " WHERE name IN ( '" + 
-            toFind.items.map(item => (item.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows : null;
-    const foundItems = items.map(item => (item.name));
-    
-    const itemsToAdd = toFind.items.filter(item => (!foundItems.includes(item)));
-    if (itemsToAdd.length > 0){
-        //get max item ID, then insert new rows
-        let itemID = Number(await (await db.query(" SELECT MAX(id) AS max FROM items ", [])).rows[0]['max'] || 0);
+    // create Array Object representation of csv file
+    const csvDeals = dealCsv.map(deal => {
+        const itemObjs = [];
         
-        itemsToAdd.forEach(async (item) => {
-            itemID++;
-            await db.query(" INSERT INTO items (id, name) VALUES ($1, $2) ", [itemID, item.replace("'", "''")]);
-        })
-    }
-    
-    //get updated items
-    items = await (await db.query(" SELECT name, id FROM items " + 
-            " WHERE name IN ( '" + 
-            toFind.items.map(item => (item.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows || null;
+        for (let i = 0; i < deal.items.split('|').length; i++){
+            const item = deal.items.split('|')[i] ? deal.items.split('|')[i] : '';
+            const size = deal.sizes.split('|')[i] ? deal.sizes.split('|')[i] : '';
+            const count = deal.counts.split('|')[i] ? deal.counts.split('|')[i] : '';
+            const option = deal.options.split('|')[i] ? deal.options.split('|')[i] : '';
+            const optioncount = deal.optioncounts.split('|')[i] ? deal.optioncounts.split('|')[i] : '';
 
-    //find / update sizes
-    let sizes = toFind.sizeStrings.length > 0 
-        ? await (await db.query(" SELECT name, id, item_id FROM sizes " + 
-            " WHERE name IN ( '" + 
-            toFind.sizeStrings.map(item => (item.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows : null;
-    
-    const sizesToAdd = [];
-    toFind.sizes.forEach(size => {
-        let sizeExist = false;
-        let sizeItemId = items.find(item => item.name === size.itemName) ? Number(items.find(item => item.name === size.itemName).id || -1) : -1;
-        sizes.forEach(foundSize => {
-            if (foundSize.name === size.sizeName
-                && Number(foundSize.item_id) === sizeItemId){
-                sizeExist = true;
-            }
-        });
-        if (!sizeExist){
-            sizesToAdd.push({
-                name: size.sizeName,
-                item_id: sizeItemId,
-            });
-        }
-    })
-    if (sizesToAdd.length > 0){
-        //get max item ID, then insert new rows
-        let sizeID = Number(await (await db.query(" SELECT MAX(id) AS max FROM sizes ", [])).rows[0]['max'] || 0);
-        
-        sizesToAdd.forEach(async (size) => {
-            sizeID++;
-            await db.query(" INSERT INTO sizes (id, name, item_id) VALUES ($1, $2, $3) ", [sizeID, size.name.replace("'", "''"), size.item_id]);
-        })
-    }
-    
-    //get updated sizes
-    sizes = await (await db.query(" SELECT name, id, item_id FROM sizes " + 
-            " WHERE name IN ( '" + 
-            toFind.sizeStrings.map(item => (item.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows || null;
-
-
-    //find / update options
-    let options = toFind.optionStrings.length > 0 
-        ? await (await db.query(" SELECT name, id, item_id FROM options " + 
-            " WHERE name IN ( '" + 
-            toFind.optionStrings.map(item => (item.replace("'", "''"))).join("', '")
-             + "' ) ", [])).rows : null;
-    
-    const optionsToAdd = [];
-    toFind.options.forEach(option => {
-        let optionExist = false;
-        let optionItemId = Number(items.find(item => item.name === option.itemName).id || 0);
-        options.forEach(foundOption => {
-            if (foundOption.name === option.optionName
-                && Number(foundOption.item_id) === optionItemId){
-                optionExist = true;
-            }
-        });
-        if (!optionExist){
-            optionsToAdd.push({
-                name: option.optionName,
-                item_id: optionItemId,
-            });
-        }
-    })
-    if (optionsToAdd.length > 0){
-        //get max item ID, then insert new rows
-        let optionID = Number(await (await db.query(" SELECT MAX(id) AS max FROM options ", [])).rows[0]['max'] || 0);
-        
-        optionsToAdd.forEach(async (option) => {
-            optionID++;
-            await db.query(" INSERT INTO options (id, name, item_id) VALUES ($1, $2, $3) ", [optionID, option.name.replace("'", "''"), option.item_id]);
-        })
-    }
-    
-    //get updated options
-    options = await (await db.query(" SELECT name, id, item_id FROM options " + 
-        " WHERE name IN ( '" + 
-        toFind.optionStrings.map(item => (item.replace("'", "''"))).join("', '")
-        + "' ) ", [])).rows || null;
-
-    let dealID = Number(await (await db.query(" SELECT MAX(id) AS max FROM deals ", [])).rows[0]['max'] || 0);
-    //for each deal record: as a for loop to ensure runs as sync
-    for (let i = 0; i < dealCsv.length; i++){
-        const deal = dealCsv[i];
-        try {
-            //verify chain or store
-            const chainID = chains ? Number(chains.find(chain => chain.name === deal.chain_name).id || 0) : 0;
-            const storeID = stores ? Number(stores.find(store => store.name === deal.store_name).id || 0) : 0;
-
-            //split up items
-            const countList = deal.counts.split('|');
-            const itemList = deal.items.split('|');
-            const sizeList = deal.sizes.split('|');
-            const optionList = deal.options.split('|');
-            const optionCountList = deal.optioncounts.split('|');
-
-            const itemObjs = [];
-            for (let i = 0; i < itemList.length; i++){
-                const newItem = {
-                    count: Number(countList[i] || 0),
-                    itemName: itemList[i],
-                    itemId: 0,
-                    sizeName: sizeList[i] || null,
-                    sizeId: 0,
-                    optionName: optionList[i] || null,
-                    optionId: 0,
-                    optionCount: Number(optionCountList[i] || 0),
-                }
-                if (newItem.itemName){
-                    newItem.itemId = Number(items.find(item => (item.name === newItem.itemName)).id || 0);
-                }
-                if (newItem.sizeName){
-                    newItem.sizeId = Number(sizes.find(size => (size.name === newItem.sizeName)).id || 0);
-                }
-                if (newItem.optionName){
-                    newItem.optionId = Number(options.find(option => (option.name === newItem.optionName)).id || 0);
-                }
-
-                itemObjs.push(newItem);
-            }
-            //create item arrays
-            const itemIDs = [];
-            const sizeIDs = [];
-            const optionIDs = [];
-            const itemCount = [];
-            const optionCount = [];
-
-            itemObjs.forEach(itemObj => {
-                itemIDs.push(itemObj.itemId);
-                sizeIDs.push(itemObj.sizeId);
-                optionIDs.push(itemObj.optionId);
-                itemCount.push (itemObj.count);
-                optionCount.push(itemObj.optionCount);
+            itemObjs.push({
+                item: {id: 0, name: item },
+                option: {id: 0, name: option },
+                size: {id: 0, name: size },
+                count: count,
+                optioncount: optioncount,
             })
-
-            // console.log("Checking for deal", dealID, deal.name, Number(deal.price), storeID, chainID, deal.description, itemIDs, optionIDs, sizeIDs);
-
-            //check for existing deal
-            const existQuery = " SELECT id FROM deals WHERE " + 
-                " name = '" + deal.name.replace("'", "''") + "' AND " + 
-                " price = " + Number(deal.price) + " AND " + 
-                " store_id = " + storeID + " AND " + 
-                " chain_id = " + chainID + " AND " + 
-                " description = '" + deal.description.replace("'", "''") + "' AND " + 
-                " items = '{" + itemIDs.join(',') + "}' AND " + 
-                " options = '{" + optionIDs.join(',') + "}' AND " + 
-                " sizes = '{" + sizeIDs.join(',') + "}' AND " + 
-                " itemcount = '{" + itemCount.join(',') + "}' AND " + 
-                " optioncount = '{" + optionCount.join(',') + "}' ";
-
-            const {rows, rowCount} = await db.query(existQuery, []);
-            const existDeal = rowCount > 0;
-            
-            //create and upload deals
-            if(!existDeal){
-                dealID++;
-                const insertQuery = " INSERT INTO deals " + 
-                    " (id, name, price, store_id, chain_id, description, items, options, sizes, itemcount, optioncount) " + 
-                    " VALUES (" + dealID + 
-                    ", '" + deal.name.replace("'", "''") + 
-                    "', " + Number(deal.price) + 
-                    ", " + storeID + 
-                    ", " + chainID + 
-                    ", '" + deal.description.replace("'", "''") + 
-                    "', '{" + itemIDs.join(',') + "}" + 
-                    "', '{" + optionIDs.join(',') + "}" + 
-                    "', '{" + sizeIDs.join(',') + "}" + 
-                    "', '{" + itemCount.join(',') + "}" + 
-                    "', '{" + optionCount.join(',') + "}') ";
-
-                try{
-                    await db.query(insertQuery, []);
-                    console.log("Inserted", deal.name);
-                } catch (error) {
-                    console.log("Insert Error", error);
-                }
-            }
-        } catch (err) {
-            console.log("dealAdd Error", err);
         }
-    }
-    console.log("FOREACH EXIT");
+
+        return {
+            id: 0,
+            name: deal.name,
+            price: Number(deal.price),
+            store_name: deal.store_name,
+            store_id: 0,
+            chain_name: deal.chain_name,
+            chain_id: 0,
+            description: deal.description,
+            items: [],
+            options: [],
+            sizes: [],
+            itemcount: [],
+            optioncount: [],
+            itemObjs: itemObjs,
+        }
+    });
+    
+    // Load current data from DB
+    //   first, check chains and stores
+    const chains = await getDBKeyValueObject('chains', 'name', 'id');
+    const stores = await getDBKeyValueObject('stores', 'name', 'id');
+    
+    //    add chain_id and store_id to db, ensure there is at least one
+    csvDeals.forEach(deal => {
+        if (!chains[deal.chain_name] && !stores[deal.store_name]){
+            throw new Error('Store and Chain not in DB: Chain: ' + deal.chain_name + ' Store: ' + deal.store_name);
+        }
+        deal.chain_id = chains[deal.chain_name] ? chains[deal.chain_name] : 0;
+        deal.store_id = stores[deal.store_name] ? stores[deal.store_name] : 0;
+    });
+
+    //    load current items, options, sizes
+    const items = await getDBKeyValueObject('items', 'name', 'id');
+    const options = await getDBMultiKeyValueObject('options', ['name', 'item_id'], 'id');
+    const sizes = await getDBMultiKeyValueObject('sizes', ['name', 'item_id'], 'id');
+    const deals = await getDBMultiKeyValueObject('deals', ['name', 'price', 'store_id', 'chain_id', 'description', 'items', 'options', 'sizes', 'itemcount', 'optioncount'], 'id');
+    const maxItemID = await getDBMaxID('items');
+    const maxOptionID = await getDBMaxID('options');
+    const maxSizeID = await getDBMaxID('sizes');
+    const maxDealID = await getDBMaxID('deals');
+    let currItemID = maxItemID;
+    let currOptionID = maxOptionID;
+    let currSizeID = maxSizeID;
+    let currDealID = maxDealID;
+
+    // Add IDs to csvDeals, create objects for anything that needs to be added to db
+    csvDeals.forEach(deal => {
+        // find/add items
+        deal.itemObjs.forEach(itemObj => {
+            //add ids to object
+            //  itemID
+            if (itemObj.item.name){
+                if (!items[itemObj.item.name]){
+                    currItemID++;
+                    items[itemObj.item.name] = currItemID;
+                }
+                itemObj.item.id = items[itemObj.item.name];
+            } 
+            //  optionID
+            if (itemObj.option.name){
+                if (!options[itemObj.option.name + '|' + itemObj.item.id]){
+                    currOptionID++;
+                    options[itemObj.option.name + '|' + itemObj.item.id] = currOptionID;
+                }
+                itemObj.option.id = options[itemObj.option.name + '|' + itemObj.item.id];
+            }
+            //  sizeID
+            if (itemObj.size.name){
+                if (!sizes[itemObj.size.name + '|' + itemObj.item.id]){
+                    currSizeID++;
+                    sizes[itemObj.size.name + '|' + itemObj.item.id] = currSizeID;
+                }
+                itemObj.size.id = sizes[itemObj.size.name + '|' + itemObj.item.id];
+            }
+
+            //add IDs to deal item arrays
+            deal.items.push(itemObj.item.id);
+            deal.options.push(itemObj.option.id ? itemObj.option.id : 0);
+            deal.sizes.push(itemObj.size.id ? itemObj.size.id : 0);
+            deal.itemcount.push(itemObj.count ? itemObj.count : 0);
+            deal.optioncount.push(itemObj.optioncount ? itemObj.optioncount : 0);
+        });
+
+        // find/add deal
+        const dealKey = deal.name + '|' + deal.price + '|' + deal.store_id + '|' + deal.chain_id + '|' + deal.description + '|' + deal.items + '|' + deal.options + '|' + deal.sizes + '|' + deal.itemcount + '|' + deal.optioncount;
+        if (!deals[dealKey]){
+            currDealID++;
+            deals[dealKey] = currDealID;
+        }
+        deal.id = deals[dealKey];
+    });
+
+    // Add needed rows to db
+    const insertQueries = []
+    Object.keys(items).forEach(async (key) => {
+        if (items[key] > maxItemID){
+            insertQueries.push(" INSERT INTO items (id, name) VALUES (" + items[key] + ", '" + key.replace("'", "''") + "') ");
+        }
+    });
+    Object.keys(options).forEach(async (key) => {
+        if (options[key] > maxOptionID){
+            const [name, itemId] = key.split('|');
+            insertQueries.push(" INSERT INTO options (id, name, item_id) VALUES (" + options[key] + ", '" + name.replace("'", "''") + "', " + itemId + ") ");
+        }
+    });
+    Object.keys(sizes).forEach(async (key) => {
+        if (sizes[key] > maxSizeID){
+            const [name, itemId] = key.split('|');
+            insertQueries.push(" INSERT INTO sizes (id, name, item_id) VALUES (" + sizes[key] + ", '" + name.replace("'", "''") + "', " + itemId + ") ");
+        }
+    });
+    Object.keys(deals).forEach(async (key) => {
+        if (deals[key] > maxDealID){
+            const [name, price, store_id, chain_id, description, items, options, sizes, itemcount, optioncount] = key.split('|');
+            const insertQuery = " INSERT INTO " + 
+            " deals (id, name, price, store_id, chain_id, description, items, options, sizes, value, itemcount, optioncount) " + 
+            " VALUES (" + deals[key] + ", '" + name.replace("'", "''") + "', " + price + ", " + store_id + ", " + chain_id + ", '" + 
+            description.replace("'", "''") + "', " + "array[" + items + "], array[" + options + "], array[" + sizes + "], " + 
+            1 + ", array[" + itemcount + "], array[" + optioncount + "]) RETURNING id ";
+
+            insertQueries.push(insertQuery);
+        }
+    });
+    
+    let rowsAdded = 0;
+    const promises = insertQueries.map(query => new Promise(async(resolve, reject) => {
+        try{
+            await(await db.query(query, []));
+            rowsAdded++;
+            resolve();
+        } catch (error) {
+            reject();
+        }
+    }));
+    
+    await Promise.all(promises).catch(err => console.log(err));
+
+    console.log("Process Complete: " + insertQueries.length + " rows added");
 } catch (error){
     console.log("Process ERROR", error);
 }}
@@ -355,6 +202,7 @@ try {
     let currentChainID = maxChainID[0]['maxid'] || 0;
     
     //insert missing chains
+    let chainsAdded = 0;
     for (let i = 0; i < chainCsv.length; i++){
         const chain = chainCsv[i];
         if (!chainList.includes(chain.name)){
@@ -368,11 +216,13 @@ try {
 
             try {
                 await db.query(insertQuery, []);
+                chainsAdded++;
             } catch (error) {
                 console.log('insert error', error);
             }
         }
     }
+    console.log("Process Complete: " + chainsAdded + " chains added.");
 } catch (error){
     console.log("Chains ERROR", error);
 }}
@@ -415,6 +265,7 @@ try {
     let currentStoreID = maxStoreID[0]['maxid'] || 0;
 
     //insert missing stores
+    let storesAdded = 0;
     for (let i = 0; i < storeCsv.length; i++) {
         const store = storeCsv[i];
         if (!storeList.includes(store.name)){
@@ -440,8 +291,10 @@ try {
             " " + store.delivery + " ) ";
 
             await db.query(insertQuery, []);
+            storesAdded++;
         }
     }
+    console.log("Process complete: " + storesAdded + " stores added");
 } catch (error){
     console.log("Stores ERROR", error);
 }}
@@ -468,4 +321,30 @@ fs.readFile(fileName, 'utf8', (err, data) => {
     });
 });
 
+const getDBKeyValueObject = async (table, keyColumn, valueColumn) => {
+    const results = await (await db.query(" SELECT " + keyColumn + ", " + valueColumn + " FROM " + table + " ", [])).rows;
+    const keyValueObject = {};
+    if (results){
+        results.forEach(record => {
+            keyValueObject[record[keyColumn]] = record[valueColumn];
+        });
+    }
 
+    return keyValueObject;
+}
+const getDBMultiKeyValueObject = async (table, keyColumns, valueColumn, delimiter = '|') => {
+    const results = await (await db.query(" SELECT " + keyColumns.join(', ') + ", " + valueColumn + " FROM " + table + " ", [])).rows;
+    const keyValueObject = {};
+    if (results){
+        results.forEach(record => {
+            const keyStringArray = keyColumns.map(colName => record[colName]);
+            keyValueObject[keyStringArray.join(delimiter)] = record[valueColumn];
+        });
+    }
+
+    return keyValueObject;
+}
+const getDBMaxID = async (table, idColumn = 'id') => {
+    const maxID = await (await db.query(" SELECT MAX(" + idColumn + ") as max FROM " + table + " ", [])).rows;
+    return maxID[0].max ? Number(maxID[0].max) : 0;
+}
