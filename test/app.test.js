@@ -277,7 +277,7 @@ describe("Path: /itemoptions", () => {
   test("It should have the Size and Option defaults when the item has none", async () => {
     const response = await request(app).post("/itemoptions");
     const rows = JSON.parse(response.text).items;
-    const dip = rows.find(row => row.name === 'Dipping Sauce');
+    const dip = rows.find(row => row.name === 'Dip');
     const sizeDefault = dip.sizes.find(size => size.size === "------");
     expect(sizeDefault.id).toBe(0);
     const optionDefault = dip.options.find(option => option.display === '------');
