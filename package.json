@@ -2,6 +2,9 @@
   "name": "pizzadealback",
   "version": "1.0.0",
   "description": "Backend for Pizza Deal",
+  "engines": {
+    "node": "14.x"
+  },
   "main": "app.js",
   "dependencies": {
     "axios": "^0.21.1",
