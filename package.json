@@ -16,16 +16,18 @@
     "pg": "^8.3.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.13.14",
     "babel-cli": "^6.26.0",
     "babel-preset-env": "^1.7.0",
-    "jest": "^26.0.1",
+    "braces": "^3.0.2",
+    "jest": "^26.6.3",
     "nodemon": "^2.0.4",
     "superagent": "^5.2.2",
     "supertest": "^4.0.2"
   },
   "scripts": {
     "devstart": "nodemon server.js",
-    "single_test": "jest",
+    "single_test": "jest --collectCoverage",
     "start": "node server.js",
     "test": "nodemon --ext js --watch ./ --exec jest --delay 1"
   },
